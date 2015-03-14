@@ -1,50 +1,31 @@
-# rubysockd
+# Sockd
 
-This gem is my attempt at creating a simple boilerplate ruby daemon which interfaces over TCP or unix sockets, which can be forked and built upon whenever I need to create a persistant, single-threaded daemon with a simple API.
+TODO: Write a gem description
 
-Hopefully others will find this simple exercise useful.
+## Installation
 
-The commands are simple:
+Add this line to your application's Gemfile:
 
-```bash
-$ rubysockd start		# start the daemon
-$ rubysockd stop		# stop the daemon
-$ rubysockd restart		# stop, then start the daemon
+```ruby
+gem 'sockd'
 ```
 
---------
+And then execute:
 
-Issuing `rubysockd` without a command will start the server without deamonizing it for easy debugging.
+    $ bundle
 
-```bash
-$ rubysockd
-Starting rubysockd server...
-Awaiting connections...
-```
+Or install it yourself as:
 
---------
+    $ gem install sockd
 
-Any other command will run as a client and attempt to send a message to the daemon, printing the response to stdout.
+## Usage
 
-```bash
-$ rubysockd get foo
-bar
-```
+TODO: Write usage instructions here
 
---------
+## Contributing
 
-## Additional arguments
-
-Use help command for reference to custom pid, user, group, and socket settings.
-
-```bash
-$ rubysockd --help
-...
-```
-
---------
-
-Note the socket can be a Unix socket, or a TCP connection.  Any socket which starts with a '/' will be treated as a Unix socket.  Remember if you use a non-default socket you must provide the same socket argument when issuing commands to a running daemon.
-
---------
-
+1. Fork it ( https://github.com/[my-github-username]/sockd/fork )
+2. Create your feature branch (`git checkout -b my-new-feature`)
+3. Commit your changes (`git commit -am 'Add some feature'`)
+4. Push to the branch (`git push origin my-new-feature`)
+5. Create a new Pull Request
