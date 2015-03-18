@@ -62,10 +62,10 @@ module Sockd
     # define our socket handler by providing a block, or trigger the callback
     # with the provided message
     # @runner.handle { |msg| if msg == 'foo' then return 'bar' ... }
-    def handle(message = nil, &block)
+    def handle(message = nil, socket = nil, &block)
       return self if block_given? && @handle = block
       @handle || (raise SockdError, "No message handler provided.")
-      @handle.call(message, self)
+      @handle.call(message, socket)
     end
 
     # call one of start, stop, restart, or send
@@ -157,7 +157,12 @@ module Sockd
           begin
             # wait for input
             if IO.select([sock], nil, nil, 2.0)
-              handle sock
+              msg = sock.recv(256, Socket::MSG_PEEK)
+              if msg.chomp == "ping"
+                sock.print "pong\r\n"
+              else
+                handle msg, sock
+              end
             else
               log "connection timed out"
             end
