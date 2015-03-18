@@ -98,6 +98,7 @@ module Sockd
       on_interrupt do |signal|
         log "#{signal} received, shutting down..."
         teardown
+        cleanup
         exit 130
       end
 
@@ -196,6 +197,15 @@ module Sockd
     rescue Errno::EACCES
       sock = options[:socket] || "#{options[:host]}:#{options[:port]}"
       raise ProcError, "unable to open socket: #{sock} (check permissions)"
+    end
+
+    # clean up UNIXSocket upon termination
+    def cleanup
+      if options[:socket] && File.exists?(options[:socket])
+        File.delete(options[:socket])
+      end
+    rescue StandardError
+      raise ProcError, "unable to unlink socket: #{options[:socket]} (check permissions)"
     end
 
     # handle process termination signals
