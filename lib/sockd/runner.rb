@@ -148,6 +148,11 @@ module Sockd
       puts response
     end
 
+    # output a timestamped log message
+    def log(message)
+      puts Time.now.strftime('[%d-%b-%Y %H:%M:%S] ') + message
+    end
+
     protected
 
     # run a server loop, passing data off to our handler
@@ -333,10 +338,6 @@ module Sockd
         sleep interval
       end
       timer > 0
-    end
-
-    def log(message)
-      puts Time.now.strftime('%Y-%m-%d %H:%M:%S: ') + message
     end
   end
 end
