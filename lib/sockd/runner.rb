@@ -1,5 +1,6 @@
 require "logger"
 require "socket"
+require "timeout"
 require "fileutils"
 require "sockd/errors"
 
@@ -178,7 +179,25 @@ module Sockd
     # return a UNIXServer or TCPServer instance depending on config
     def server(&block)
       if options[:socket]
-        UNIXServer.open(options[:socket], &block)
+        begin
+          UNIXServer.open(options[:socket], &block)
+        rescue Errno::EADDRINUSE
+          begin
+            Timeout.timeout(5) do
+              UNIXSocket.open(options[:socket]) do |sock|
+                sock.write "ping\r\n"
+                if sock.gets.chomp == "pong"
+                  raise ProcError, "socket #{options[:socket]} already in use by another instance of #{name}"
+                end
+              end
+            end
+            raise ProcError, "socket #{options[:socket]} already in use by another process"
+          rescue Errno::ECONNREFUSED, Timeout::Error
+            log "socket is stale, reopening"
+            cleanup
+            UNIXServer.open(options[:socket], &block)
+          end
+        end
       else
         TCPServer.open(options[:host], options[:port], &block)
       end
