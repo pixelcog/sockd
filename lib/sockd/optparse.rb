@@ -19,8 +19,7 @@ module Sockd
         log_path:  false,
         force:     false,
         user:      nil,
-        group:     nil,
-        verbose:   false
+        group:     nil
       }.merge(defaults))
       @callback = block if block_given?
     end
@@ -41,7 +40,7 @@ module Sockd
             #{name} stop [-f]       stop a running daemon
             #{name} restart         stop, then start the daemon
             #{name} send <message>  send a message to a running daemon
-            #{name} <message>       send a message (command implied)
+            #{name} <message>       send a message (send command implied)
 
         Options:
         EOF
@@ -60,7 +59,7 @@ module Sockd
           options[:socket] = nil
         end
 
-        opts.on("-s", "--socket [SOCKET]", String, "Listen on Unix socket path (disables network support)", "(default: #{options[:socket]})") do |x|
+        opts.on("-s", "--socket SOCKET", String, "Listen on Unix socket path (disables network support)", "(default: #{options[:socket]})") do |x|
           options[:socket] = File.expand_path(x)
         end
 
@@ -72,11 +71,11 @@ module Sockd
           options[:log_path] = File.expand_path(x)
         end
 
-        opts.on("-u", "--user USER", String, "Assume the identity of USER when running as a daemon (default: #{options[:user]})") do |x|
+        opts.on("-u", "--user USER", String, "Assume the identity of USER when running as a daemon", "(default: #{options[:user]})") do |x|
           options[:user] = x
         end
 
-        opts.on("-g", "--group GROUP", String, "Assume group GROUP when running as a daemon (default: #{options[:group]})") do |x|
+        opts.on("-g", "--group GROUP", String, "Assume group GROUP when running as a daemon", "(default: #{options[:group]})") do |x|
           options[:group] = x
         end
 
