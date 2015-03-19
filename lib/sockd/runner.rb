@@ -88,7 +88,7 @@ module Sockd
       if options[:daemonize]
         pid = daemon_running?
         raise ProcError, "#{name} process already running (#{pid})" if pid
-        log "starting #{name} process..."
+        puts "starting #{name} process..."
         return self unless daemonize
       end
 
@@ -111,14 +111,14 @@ module Sockd
       if daemon_running?
         pid = stored_pid
         Process.kill('TERM', pid)
-        log "SIGTERM sent to #{name} (#{pid})"
+        puts "SIGTERM sent to #{name} (#{pid})"
         if !wait_until(2) { daemon_stopped? pid } && options[:force]
           Process.kill('KILL', pid)
-          log "SIGKILL sent to #{name} (#{pid})"
+          puts "SIGKILL sent to #{name} (#{pid})"
         end
         raise ProcError.new("unable to stop #{name} process") if daemon_running?
       else
-        log "#{name} process not running"
+        warn "#{name} process not running"
       end
       self
     end
