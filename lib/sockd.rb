@@ -17,9 +17,10 @@ module Sockd
 
   # instantiate and run a sockd service using command line arguments
   def self.run(name, options = {}, &block)
-    parser = optparse(name, options)
+    runner = define(name, options, &block)
+    parser = optparse(runner.name, runner.options)
     argv = parser.parse!
-    define(name, options, &block).run(*argv)
+    runner.run(*argv)
   rescue OptionParserError, BadCommandError => e
     warn "Error: #{e.message}"
     warn "#{parser}\n"
