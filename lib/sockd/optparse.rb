@@ -18,8 +18,8 @@ module Sockd
         pid_path:  "/var/run/#{safe_name}.pid",
         log_path:  false,
         force:     false,
-        user:      nil,
-        group:     nil
+        user:      false,
+        group:     false
       }.merge(defaults))
       @callback = block if block_given?
     end

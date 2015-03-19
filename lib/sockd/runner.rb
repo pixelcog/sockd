@@ -25,8 +25,8 @@ module Sockd
         :pid_path  => "/var/run/#{safe_name}.pid",
         :log_path  => false,
         :force     => false,
-        :user      => nil,
-        :group     => nil
+        :user      => false,
+        :group     => false
       }.merge(options)
 
       [:setup, :teardown, :handle].each do |opt|
