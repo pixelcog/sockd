@@ -45,7 +45,7 @@ module Sockd
         Options:
         EOF
 
-        instance_exec(opts, callback) if callback
+        instance_exec(opts, &callback) if callback
 
         opts.on("-p", "--port PORT", String, "Listen on TCP port PORT (default: #{options[:port]})") do |x|
           options[:port] = x
