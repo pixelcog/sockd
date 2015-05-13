@@ -293,8 +293,8 @@ module Sockd
       gid = Etc.getgrnam(group).gid if group
       gid = Etc.getpwnam(user).gid if group.nil? && user
 
-      Process::Sys.setuid(uid) if uid
       Process::Sys.setgid(gid) if gid
+      Process::Sys.setuid(uid) if uid
     rescue ArgumentError => e
       # user or group does not exist
       raise ProcError, "unable to drop privileges (#{e})"
