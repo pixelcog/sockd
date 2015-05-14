@@ -21,6 +21,7 @@ module Sockd
         :host      => "127.0.0.1",
         :port      => 0,
         :socket    => false,
+        :mode      => 0660,
         :daemonize => true,
         :pid_path  => "/var/run/#{safe_name}.pid",
         :log_path  => false,
@@ -195,6 +196,16 @@ module Sockd
             File.delete(options[:socket])
             UNIXServer.new(options[:socket])
           end
+        end.tap do
+          # get user and group ids
+          uid = Etc.getpwnam(options[:user]).uid if options[:user]
+          gid = Etc.getgrnam(options[:group]).gid if options[:group]
+          gid = Etc.getpwnam(options[:user]).gid if !gid && options[:user]
+          File.chown(uid, gid, options[:socket]) if uid || gid
+
+          # ensure mode is octal if string provided
+          options[:mode] = options[:mode].to_i(8) if options[:mode].is_a?(String)
+          File.chmod(options[:mode], options[:socket])
         end
       else
         TCPServer.new(options[:host], options[:port])

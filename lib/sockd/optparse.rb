@@ -14,6 +14,7 @@ module Sockd
         host:      "127.0.0.1",
         port:      0,
         socket:    false,
+        mode:      0660,
         daemonize: true,
         pid_path:  "/var/run/#{safe_name}.pid",
         log_path:  false,
@@ -61,6 +62,10 @@ module Sockd
 
         opts.on("-s", "--socket SOCKET", String, "Listen on Unix socket path (disables network support)", "(default: #{options[:socket]})") do |x|
           options[:socket] = File.expand_path(x)
+        end
+
+        opts.on("-m", "--mode MODE", String, "Set file permissions when using Unix socket", "(default: #{options[:mode]})") do |x|
+          options[:mode] = x
         end
 
         opts.on("-P", "--pid FILE", String, "Where to write the PID file", "(default: #{options[:pid_path]})") do |x|
