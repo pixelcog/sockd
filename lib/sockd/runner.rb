@@ -295,7 +295,7 @@ module Sockd
 
       Process::Sys.setgid(gid) if gid
       Process::Sys.setuid(uid) if uid
-    rescue ArgumentError => e
+    rescue ArgumentError, Errno::EPERM => e
       # user or group does not exist
       raise ProcError, "unable to drop privileges (#{e})"
     end
