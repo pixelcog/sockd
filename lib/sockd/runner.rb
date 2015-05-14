@@ -92,18 +92,38 @@ module Sockd
         return self unless daemonize
       end
 
-      drop_privileges options[:user], options[:group]
+      server do |server|
+        drop_privileges options[:user], options[:group]
 
-      setup
+        setup
 
-      on_interrupt do |signal|
-        log "#{signal} received, shutting down..."
-        teardown
-        cleanup
-        exit 130
+        on_interrupt do |signal|
+          log "#{signal} received, shutting down..."
+          teardown
+          # cleanup
+          exit 130
+        end
+
+        while true
+          sock = server.accept
+          begin
+            # wait for input
+            if IO.select([sock], nil, nil, 2.0)
+              msg = sock.recv(256, Socket::MSG_PEEK)
+              if msg.chomp == "ping"
+                sock.print "pong\r\n"
+              else
+                handle msg, sock
+              end
+            else
+              log "connection timed out"
+            end
+          rescue Errno::EPIPE, Errno::ECONNRESET
+            log "connection broken"
+          end
+          sock.close unless sock.closed?
+        end
       end
-
-      serve
     end
 
     # stop our service
@@ -155,37 +175,11 @@ module Sockd
 
     protected
 
-    # run a server loop, passing data off to our handler
-    def serve
-      server do |server|
-        log "listening on " + server.local_address.inspect_sockaddr
-        while 1
-          sock = server.accept
-          begin
-            # wait for input
-            if IO.select([sock], nil, nil, 2.0)
-              msg = sock.recv(256, Socket::MSG_PEEK)
-              if msg.chomp == "ping"
-                sock.print "pong\r\n"
-              else
-                handle msg, sock
-              end
-            else
-              log "connection timed out"
-            end
-          rescue Errno::EPIPE, Errno::ECONNRESET
-            log "connection broken"
-          end
-          sock.close unless sock.closed?
-        end
-      end
-    end
-
     # return a UNIXServer or TCPServer instance depending on config
-    def server(&block)
-      if options[:socket]
+    def server
+      server = if options[:socket]
         begin
-          UNIXServer.open(options[:socket], &block)
+          UNIXServer.new(options[:socket])
         rescue Errno::EADDRINUSE
           begin
             Timeout.timeout(5) do
@@ -198,13 +192,18 @@ module Sockd
             end
             raise ProcError, "socket #{options[:socket]} already in use by another process"
           rescue Errno::ECONNREFUSED, Timeout::Error
-            log "socket is stale, reopening"
-            cleanup
-            UNIXServer.open(options[:socket], &block)
+            File.delete(options[:socket])
+            UNIXServer.new(options[:socket])
           end
         end
       else
-        TCPServer.open(options[:host], options[:port], &block)
+        TCPServer.new(options[:host], options[:port])
+      end
+      begin
+        log "listening on " + server.local_address.inspect_sockaddr
+        yield(server)
+      ensure
+        server.close
       end
     rescue Errno::EACCES
       sock = options[:socket] || "#{options[:host]}:#{options[:port]}"
@@ -221,15 +220,6 @@ module Sockd
     rescue Errno::EACCES
       sock = options[:socket] || "#{options[:host]}:#{options[:port]}"
       raise ProcError, "unable to open socket: #{sock} (check permissions)"
-    end
-
-    # clean up UNIXSocket upon termination
-    def cleanup
-      if options[:socket] && File.exists?(options[:socket])
-        File.delete(options[:socket])
-      end
-    rescue StandardError
-      raise ProcError, "unable to unlink socket: #{options[:socket]} (check permissions)"
     end
 
     # handle process termination signals
