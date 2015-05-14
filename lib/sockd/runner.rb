@@ -86,14 +86,15 @@ module Sockd
 
     # start our service
     def start
-      if options[:daemonize]
-        pid = daemon_running?
-        raise ProcError, "#{name} process already running (#{pid})" if pid
-        puts "starting #{name} process..."
-        return self unless daemonize
-      end
-
       server do |server|
+
+        if options[:daemonize]
+          pid = daemon_running?
+          raise ProcError, "#{name} process already running (#{pid})" if pid
+          puts "starting #{name} process..."
+          return self unless daemonize
+        end
+
         drop_privileges options[:user], options[:group]
 
         setup
@@ -105,6 +106,7 @@ module Sockd
           exit 130
         end
 
+        log "listening on " + server.local_address.inspect_sockaddr
         while true
           sock = server.accept
           begin
@@ -211,7 +213,6 @@ module Sockd
         TCPServer.new(options[:host], options[:port])
       end
       begin
-        log "listening on " + server.local_address.inspect_sockaddr
         yield(server)
       ensure
         server.close
