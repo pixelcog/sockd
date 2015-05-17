@@ -1,22 +1,20 @@
-require "logger"
 require "socket"
 require "timeout"
 require "fileutils"
-require "sockd/errors"
 
 module Sockd
   class Runner
 
+    class ServiceError < RuntimeError; end
+
     attr_reader :options, :name
 
     class << self
-      def define(*args, &block)
-        self.new(*args, &block)
-      end
+      alias define new
     end
 
-    def initialize(name, options = {}, &block)
-      @name = name
+    def initialize(name = nil, options = {}, &block)
+      @name = name || File.basename($0)
       @options = {
         :host      => "127.0.0.1",
         :port      => 0,
@@ -66,22 +64,8 @@ module Sockd
     # @runner.handle { |msg| if msg == 'foo' then return 'bar' ... }
     def handle(message = nil, socket = nil, &block)
       return self if block_given? && @handle = block
-      @handle || (raise SockdError, "No message handler provided.")
+      raise ArgumentError, "no message handler provided" unless @handle
       @handle.call(message, socket)
-    end
-
-    # call one of start, stop, restart, or send
-    def run(method, *args)
-      if %w(start stop restart send).include?(method)
-        begin
-          self.public_send method.to_sym, *args
-        rescue ArgumentError => e
-          raise unless e.backtrace[1].include? "in `public_send"
-          raise BadCommandError, "wrong number of arguments for command: #{method}"
-        end
-      else
-        raise BadCommandError, "invalid command: #{method}"
-      end
     end
 
     # start our service
@@ -90,9 +74,12 @@ module Sockd
 
         if options[:daemonize]
           pid = daemon_running?
-          raise ProcError, "#{name} process already running (#{pid})" if pid
+          raise ServiceError, "#{name} process already running (#{pid})" if pid
           puts "starting #{name} process..."
-          return self unless daemonize
+          unless daemonize
+            raise ServiceError, "invalid ping response" unless send('ping').chomp == 'pong'
+            return self
+          end
         end
 
         drop_privileges options[:user], options[:group]
@@ -106,7 +93,8 @@ module Sockd
           exit 130
         end
 
-        log "listening on " + server.local_address.inspect_sockaddr
+        log "listening on #{server.local_address.inspect_sockaddr}"
+
         while true
           sock = server.accept
           begin
@@ -139,7 +127,7 @@ module Sockd
           Process.kill('KILL', pid)
           puts "SIGKILL sent to #{name} (#{pid})"
         end
-        raise ProcError.new("unable to stop #{name} process") if daemon_running?
+        raise ServiceError, "unable to stop #{name} process" if daemon_running?
       else
         warn "#{name} process not running"
       end
@@ -153,22 +141,14 @@ module Sockd
     end
 
     # send a message to a running service and return the response
-    def send(*args)
-      raise ArgumentError if args.empty?
-      message = args.join(' ')
-      response = nil
-      begin
-        client do |sock|
-          sock.write message + "\r\n"
-          response = sock.gets
-        end
-      rescue Errno::ECONNREFUSED, Errno::ENOENT
-        unless daemon_running?
-          abort "#{name} process not running"
-        end
-        abort "unable to establish connection"
+    def send(message)
+      client do |sock|
+        sock.write "#{message}\r\n"
+        sock.recv(256)
       end
-      puts response
+    rescue Errno::ECONNREFUSED, Errno::ENOENT
+      raise ServiceError, "#{name} process not running" unless daemon_running?
+      raise ServiceError, "unable to establish connection"
     end
 
     # output a timestamped log message
@@ -189,11 +169,11 @@ module Sockd
               UNIXSocket.open(options[:socket]) do |sock|
                 sock.write "ping\r\n"
                 if sock.gets.chomp == "pong"
-                  raise ProcError, "socket #{options[:socket]} already in use by another instance of #{name}"
+                  raise ServiceError, "socket #{options[:socket]} already in use by another instance of #{name}"
                 end
               end
             end
-            raise ProcError, "socket #{options[:socket]} already in use by another process"
+            raise ServiceError, "socket #{options[:socket]} already in use by another process"
           rescue Errno::ECONNREFUSED, Timeout::Error
             File.delete(options[:socket])
             UNIXServer.new(options[:socket])
@@ -219,7 +199,7 @@ module Sockd
       end
     rescue Errno::EACCES
       sock = options[:socket] || "#{options[:host]}:#{options[:port]}"
-      raise ProcError, "unable to open socket: #{sock} (check permissions)"
+      raise ServiceError, "unable to open socket: #{sock} (check permissions)"
     end
 
     # return a UNIXSocket or TCPSocket instance depending on config
@@ -231,7 +211,7 @@ module Sockd
       end
     rescue Errno::EACCES
       sock = options[:socket] || "#{options[:host]}:#{options[:port]}"
-      raise ProcError, "unable to open socket: #{sock} (check permissions)"
+      raise ServiceError, "unable to open socket: #{sock} (check permissions)"
     end
 
     # handle process termination signals
@@ -271,7 +251,7 @@ module Sockd
 
       Process.waitpid
       unless wait_until { daemon_running? }
-        raise ProcError, "failed to start #{@name} service"
+        raise ServiceError, "failed to start #{name} service"
       end
     end
 
@@ -299,7 +279,7 @@ module Sockd
       Process::Sys.setuid(uid) if uid
     rescue ArgumentError, Errno::EPERM => e
       # user or group does not exist
-      raise ProcError, "unable to drop privileges (#{e})"
+      raise ServiceError, "unable to drop privileges (#{e})"
     end
 
     # redirect our output as per configuration
@@ -329,7 +309,7 @@ module Sockd
       rescue Errno::EACCES, Errno::EISDIR
       end
       unless File.file?(path) && File.writable?(path)
-        raise ProcError, "unable to open file: #{path} (check permissions)"
+        raise ServiceError, "unable to open file: #{path} (check permissions)"
       end
       path
     end
