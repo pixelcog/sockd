@@ -134,6 +134,8 @@ module Sockd
         warn "#{name} process not running"
       end
       self
+    rescue Errno::EPERM => e
+      raise ServiceError, "unable to stop #{name} process (#{e.message})"
     end
 
     # restart our service
@@ -195,9 +197,9 @@ module Sockd
       ensure
         server.close
       end
-    rescue Errno::EACCES
+    rescue Errno::EACCES, Errno::EADDRINUSE => e
       sock = options[:socket] || "#{options[:host]}:#{options[:port]}"
-      raise ServiceError, "unable to open socket: #{sock} (check permissions)"
+      raise ServiceError, "unable to open socket: #{sock} (#{e.message})"
     end
 
     # return a UNIXSocket or TCPSocket instance depending on config
@@ -260,6 +262,8 @@ module Sockd
       pid
     rescue Errno::ESRCH
       false
+    rescue Errno::EPERM
+      pid
     end
 
     # reverse of daemon_running?
