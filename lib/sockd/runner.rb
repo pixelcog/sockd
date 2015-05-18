@@ -179,14 +179,13 @@ module Sockd
           end
         end.tap do
           # get user and group ids
-          uid = Etc.getpwnam(options[:user]).uid if options[:user]
-          gid = Etc.getgrnam(options[:group]).gid if options[:group]
-          gid = Etc.getpwnam(options[:user]).gid if !gid && options[:user]
+          uid, gid = user_id(options[:user]) if options[:user]
+          gid = group_id(options[:group]) if options[:group]
           File.chown(uid, gid, options[:socket]) if uid || gid
 
           # ensure mode is octal if string provided
           options[:mode] = options[:mode].to_i(8) if options[:mode].is_a?(String)
-          File.chmod(options[:mode], options[:socket])
+          File.chmod(options[:mode], options[:socket]) if options[:mode] != 0
         end
       else
         TCPServer.new(options[:host], options[:port])
@@ -270,14 +269,12 @@ module Sockd
 
     # drop privileges to the specified user and group
     def drop_privileges(user, group)
-      uid = Etc.getpwnam(user).uid if user
-      gid = Etc.getgrnam(group).gid if group
-      gid = Etc.getpwnam(user).gid if group.nil? && user
+      uid, gid = user_id(user) if user
+      gid = group_id(group) if group
 
       Process::Sys.setgid(gid) if gid
       Process::Sys.setuid(uid) if uid
-    rescue ArgumentError, Errno::EPERM => e
-      # user or group does not exist
+    rescue Errno::EPERM => e
       raise ServiceError, "unable to drop privileges (#{e})"
     end
 
@@ -319,6 +316,19 @@ module Sockd
         sleep interval
       end
       timer > 0
+    end
+
+    def user_id(user)
+      user = Etc.getpwnam(user)
+      [user.uid, user.gid]
+    rescue ArgumentError
+      raise ServiceError, "unable to find user: #{user}"
+    end
+
+    def group_id(group)
+      Etc.getgrnam(group).gid
+    rescue ArgumentError
+      raise ServiceError, "unable to find group: #{user}"
     end
   end
 end
