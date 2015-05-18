@@ -1,3 +1,4 @@
+require "yaml"
 require "optparse"
 require "sockd/runner"
 require "sockd/version"
@@ -5,6 +6,7 @@ require "sockd/version"
 module Sockd
 
   class ParseError < OptionParser::ParseError; end
+  class ConfigFileError < RuntimeError; end
 
   class << self
 
@@ -20,8 +22,26 @@ module Sockd
 
     def parse(runner, argv = ARGV, &block)
       raise ArgumentError, 'You must provide an instance of Sockd::Runner' unless runner.class <= Runner
-      parser = optparser(runner.name, runner.options, &block)
+      options = {}
+      parser = optparser(runner.name, options, &block)
       command, *message = parser.parse(argv)
+
+      if options[:config_save]
+        save_path = options[:config_path] || runner.options[:config_path]
+        raise ParseError, 'no config file path specified, unable to save' unless save_path
+        save_yaml options, save_path
+
+        puts "config saved to: #{path}"
+        exit
+      end
+
+      if options[:config_path]
+        read_yaml options, options[:config_path]
+      elsif runner.options[:config_path] && File.file?(runner.options[:config_path])
+        read_yaml options, runner.options[:config_path]
+      end
+
+      runner.options.merge! options
 
       case command
       when nil
@@ -40,7 +60,7 @@ module Sockd
       puts parser
       puts ''
       exit 1
-    rescue Runner::ServiceError => e
+    rescue ConfigFileError, Runner::ServiceError => e
       puts "Error: #{e.message}"
       exit 1
     end
@@ -67,7 +87,7 @@ module Sockd
         EOF
 
         # allow user to specify custom options
-        yield opts if block_given?
+        yield opts, options if block_given?
 
         opts.on('-p', '--port PORT', String, 'Listen on TCP port PORT') do |port|
           options[:port] = port
@@ -115,12 +135,42 @@ module Sockd
         opts.separator ''
         opts.separator 'Additional Options:'
 
+        opts.on_tail('--config PATH', String,
+                'Load default parameters from YAML file at PATH') do |path|
+          options[:config_path] = File.expand_path(path)
+        end
+
+        opts.on_tail('--save', 'Save current parameters into a config file') do
+          options[:config_save] = true
+        end
+
         opts.on_tail('-h', '--help', 'Display this usage information') do
           puts opts
           puts ''
           exit
         end
       end
+    end
+
+    def read_yaml(options, path)
+      config = YAML.load_file(path).merge!(options)
+      options.replace(config)
+    rescue Errno::EACCES, Errno::EISDIR => e
+      raise ConfigFileError, "unable to read config (#{e.message})"
+    end
+
+    def save_yaml(options, path)
+      options[:mode] = sprintf('0%o', options[:mode]) if options[:mode]
+      options.delete(:config_path)
+      options.delete(:config_save)
+
+      FileUtils.mkdir_p(File.dirname(path), mode: 0755)
+      File.open(path, 'w') do |file|
+        file.write options.to_yaml
+      end
+      File.chmod(0644, path)
+    rescue Errno::EACCES, Errno::EISDIR => e
+      raise ConfigFileError, "unable to save config (#{e.message})"
     end
   end
 end
