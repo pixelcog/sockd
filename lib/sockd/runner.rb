@@ -77,7 +77,9 @@ module Sockd
           raise ServiceError, "#{name} process already running (#{pid})" if pid
           puts "starting #{name} process..."
           unless daemonize
-            raise ServiceError, "invalid ping response" unless send('ping').chomp == 'pong'
+            unless send('ping', 10).chomp == 'pong'
+              raise ServiceError, "invalid ping response"
+            end
             return self
           end
         end
@@ -141,9 +143,11 @@ module Sockd
     end
 
     # send a message to a running service and return the response
-    def send(message)
+    def send(message, timeout = 30)
       client do |sock|
         sock.write "#{message}\r\n"
+        ready = IO.select([sock], nil, nil, timeout)
+        raise ServiceError, "timed out waiting for server response" unless ready
         sock.recv(256)
       end
     rescue Errno::ECONNREFUSED, Errno::ENOENT
@@ -165,18 +169,13 @@ module Sockd
           UNIXServer.new(options[:socket])
         rescue Errno::EADDRINUSE
           begin
-            Timeout.timeout(5) do
-              UNIXSocket.open(options[:socket]) do |sock|
-                sock.write "ping\r\n"
-                if sock.gets.chomp == "pong"
-                  raise ServiceError, "socket #{options[:socket]} already in use by another instance of #{name}"
-                end
-              end
-            end
-            raise ServiceError, "socket #{options[:socket]} already in use by another process"
-          rescue Errno::ECONNREFUSED, Timeout::Error
+            send('ping', 20)
+          rescue ServiceError
+            # socket stale, reopening
             File.delete(options[:socket])
             UNIXServer.new(options[:socket])
+          else
+            raise ServiceError, "socket #{options[:socket]} already in use by another process"
           end
         end.tap do
           # get user and group ids
