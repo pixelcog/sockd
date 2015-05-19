@@ -31,7 +31,7 @@ module Sockd
         raise ParseError, 'no config file path specified, unable to save' unless save_path
         save_yaml options, save_path
 
-        puts "config saved to: #{path}"
+        puts "config saved to: #{save_path}"
         exit
       end
 
