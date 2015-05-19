@@ -154,7 +154,7 @@ module Sockd
 
     def read_yaml(options, path)
       config = YAML.load_file(path).merge!(options)
-      options.replace(config)
+      options.replace Hash[config.map{ |k, v| [k.to_sym, v] }]
     rescue Errno::EACCES, Errno::EISDIR => e
       raise ConfigFileError, "unable to read config (#{e.message})"
     end
